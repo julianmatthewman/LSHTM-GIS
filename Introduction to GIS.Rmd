@@ -1,0 +1,337 @@
+---
+title: "Introduction to GIS in R"
+author: "Julian Matthewman"
+---
+This notebook aims to be an introduction to Geographical Information Systems (GIS) in R and is based on the corresponding 2 day course which is taught in ArcGIS. It relies on the simple features (sf) package. Simple features or simple feature access is a standard that describes how spatial objects can be represented and stored. More on this at https://r-spatial.github.io/sf/articles/sf1.html. We will also make use of the tidyverse collection of packages, especially ggplot2 for plotting maps, dplyr for data transformation and pipes, so it is advisable that you have at least some knowledge of the tidyverse before going through this notebook. We will also need the datasets from the monkeypox, london-pct and crypto folders which can be found in the LSHTM U drive under downloads/teach/GIS/ArcGIS.
+
+Let's start by loading our packages (installing them beforehand if necessary) and setting our working directory. Make sure this file is is the directory as the monkeypox, london-pct and crypto folders.
+```{r message=FALSE, warning=FALSE}
+#install.packages("sf")
+#install.packages("tidyverse")
+
+library(sf)
+library(tidyverse)
+
+#We use the package rstudiapi to automatically set the working directory to where this file is located.
+library(rstudioapi)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+```
+
+# Practical 1: Introduction using the Example "Monkeypox in Zaire"
+Let's start by loading our data using the st_read function from the sf package and plotting it using ggplot. If we view the contents of our newly created dataframe we can see that the spatial data is stored as a variable called geometry.
+```{r}
+#Windows: zaire <- st_read("H:/GIS/ArcGIS/monkeypox/zaire.shp")
+zaire <- st_read("monkeypox/zaire.shp")
+
+ggplot(zaire) +
+  geom_sf()
+```
+
+Let's load some of the other datasets and create a plot with multiple layers, coloring the forest green.
+```{r}
+#villages <- st_read("H:/GIS/ArcGIS/monkeypox/villages.shp")
+#roads <- st_read("H:/GIS/ArcGIS/monkeypox/roads.shp")
+#rivers <- st_read("H:/GIS/ArcGIS/monkeypox/rivers.shp")
+#forest <- st_read("H:/GIS/ArcGIS/monkeypox/forest.shp")
+
+villages <- st_read("monkeypox/villages.shp")
+roads <- st_read("monkeypox/roads.shp")
+rivers <- st_read("monkeypox/rivers.shp")
+forest <- st_read("monkeypox/forest.shp")
+
+ggplot() +
+  geom_sf(data = forest, fill = "green") +
+  geom_sf(data = roads) +
+  geom_sf(data = villages)
+```
+
+Now let's make the following adjustments:
+
+* change the fill of the forest to display the type of rainforest
+* choose a less horrible green using a colour palette
+* make the background white
+* make the size of the village points correspond to the population
+* "zoom in" by defining the coordinates of the area we want to view.
+```{r}
+ggplot() +
+  geom_sf(data = forest, aes(fill = VEGNTX)) +
+  scale_fill_brewer(palette = "Greens") +
+  theme_bw() +
+  geom_sf(data = roads) +
+  geom_sf(data = villages, aes(size = POPULATION), colour = "red", show.legend = "point") +
+  coord_sf(xlim = c(23, 25), ylim = c(-2.5, -4.5), expand = FALSE)
+```
+
+We can also plot our data on an interactive map using the mapview package. This can be useful to explore maps like in ArcGIS, however is less useful for producing publication grade maps, so for the rest of the notebook we will stick with ggplot.
+```{r}
+#install.packages("mapview")
+library(mapview)
+
+mapview(forest)
+```
+
+## Layer attributes
+What we would call "layer attributes" in ArcGIS is stored together with our geometries in data frames, so to examine the contents we can use functions such as view(), glimpse(), head(), summary() just as we would with any other dataset in R.
+```{r}
+head(forest)
+glimpse(roads)
+summary(villages)
+```
+
+## Joining Tables
+We join tables using the family of join functions from dplyr, most commonly with left_join() which joins one table to columns from another, matching values with the rows that they correspond to.
+
+Let's add some more datasets from a shapefile and from some dbf files. We can do this with read.dbf from the foreign package. 
+```{r include=FALSE}
+province <- st_read("monkeypox/province.shp")
+provdata <- foreign::read.dbf("monkeypox/provdata.dbf")
+health <- foreign::read.dbf("monkeypox/health.dbf")
+```
+
+First let's join village and health. The second dataset will be matched to the first one by the variable "ID" which is present in both datasets.
+We could assign the output of the left_join to the existing villages object, a new object or we can pipe the output directly into ggplot.
+```{r}
+left_join(villages, health) %>% 
+    ggplot() +
+    geom_sf(aes(size = RATE))
+```
+
+Now let's join provdata to provinces, plot the resulting object and colour the provinces by population.
+```{r}
+left_join(province, provdata) %>% 
+    ggplot() +
+    geom_sf(aes(fill=POP94))
+```
+
+We can also use the plot() function where we can also set the breaks to be quantiles.
+```{r}
+provjoined <- left_join(province, provdata)
+plot(provjoined["POP94"], breaks = "quantile")
+```
+
+It's a bit more complicated displaying quantiles in ggplot. Here is a method using the classInt package to determine breaks.
+```{r}
+library(classInt)
+breaks_qt <- classIntervals(c(min(provjoined$POP94) - .00001, provjoined$POP94), n = 7, style = "quantile")
+breaks_qt
+
+provjoined <- mutate(provjoined, POP94cut = cut(POP94, breaks_qt$brks, dig.lab = 7)) 
+#use dig.lab to limit the decimal places so the legend doesn't display in scientific notation.
+
+ggplot(provjoined) + 
+    geom_sf(aes(fill=POP94cut)) +
+    scale_fill_brewer(palette = "Greens")
+```
+
+## Selecting Data
+We can select observations (rows in a data frame) in R using dplyr's filter() function. We start by joining health to villages again, then we filter the resulting object to only include villages which have at least one case of chickenpox. We then pipe the resulting object directly into ggplot to plot said villages.
+```{r}
+left_join(villages, health) %>% 
+    filter(N_VZV_IGM >=1) %>% 
+    ggplot() +
+    geom_sf()
+```
+
+
+
+
+
+
+# Basic Exercise: Health in London
+Now let's prectice what we've learned so far using health data from the greater London area from the London Health Observatory. If we think our Enivironment is getting too cluttered by now we can always clear all objects from the workspace using the command rm(list = ls()).
+
+```{r include=FALSE}
+rm(list = ls())
+londonla <- st_read("London-PCT/london_la.shp")
+londonpct <- st_read("London-PCT/london_pct.shp")
+londonha <- st_read("London-PCT/london_ha.shp")
+
+tb <- foreign::read.dbf("London-PCT/tb.dbf")
+chd <- foreign::read.dbf("London-PCT/chd.dbf")
+obesity <- foreign::read.dbf("London-PCT/obesity.dbf")
+vaccinations <- foreign::read.dbf("London-PCT/vaccinations.dbf")
+imd <- foreign::read.dbf("London-PCT/imd.dbf")
+```
+
+## Example: Obesity in London
+```{r}
+#If there are no identical variables in two objects we wish to join, we need to specify on which variables to join using "by".
+left_join(londonha, obesity, by = c("HA95_CODE" = "HA_CODE")) %>% 
+ggplot() +
+  geom_sf(aes(fill=RATE)) +
+  scale_fill_gradient(low = "yellow", high = "brown") +
+    labs(title = "Obesity in London") +
+    geom_sf_label(aes(label=HA_NAME), size=2)
+#We can use scale_fill_gradient to reverse the deafault blue shading, picking the colours low = "#56B1F7" and high = "#132B43", or we can choose whichever colors we like for the high and low values.
+#To add text or label we can use geom_sf_text() and geom_sf_label()
+```
+
+Use the following empty chunk to create maps of:
+
+* TB rates in London being careful to filter out the missing values
+* CHD rates
+* Vaccination rates
+* Deprivation
+* .....
+
+```{r}
+
+```
+
+
+
+
+
+# Practical 2: Creating Datasets using the Example "Cryptosporidium in London"
+We will now look at ways of creating or modifying datasets to suit our mapping needs. 
+
+Let's import our datasets. Remeber you can clear all the previous objects from your workspace with rm(list = ls()). We're going to need the package readxl to read xls files.
+```{r include=FALSE}
+rm(list = ls())
+library(readxl)
+
+crypto <- read.csv("crypto/crypto.txt", stringsAsFactors=FALSE)
+serve <- read.csv("crypto/serve.txt", stringsAsFactors=FALSE)
+
+
+wards <- st_read("crypto/wards.shp")
+gla <- st_read("crypto/gla.shp")
+coast <- st_read("crypto/coast.shp")
+gb_hosp <- read.csv("crypto/gb_hosp.txt", stringsAsFactors=FALSE)
+pop <- read.csv("crypto/pop.txt", stringsAsFactors=FALSE)
+ward <- read_excel("crypto/ward.xls")
+```
+
+The geom_sf function needs a geometry object to plot the data but gb_hosp only has X and Y coordinates as seperate columns. Let's fix that. We create a new object which contains the spatial data in sf format using the st_as_sf function.
+```{r}
+gb_hosp_sf <- st_as_sf(gb_hosp, coords = c("X_coord", "Y_coord"))
+
+ggplot() +
+    geom_sf(data = coast) +
+    geom_sf(data = gb_hosp_sf)
+```
+
+What if we only want the hospitals that are in the Greater London Area? We use the gla object to help us with that.
+But first, in order to use gb_hosp_sf with gla together they need to have the same coordinate reference system (crs). Otherwise we get the error "sfc object should have crs set" or "st_crs(x) == st_crs(y) is not TRUE". This tells us the crs of the two objects don't match and that the simple features collumn (sfc) of one of our datasets needs to have a coordinate reference system (crs) assigned. Try running the code in the chunk after this one to see for yourself. Let's deal with this now:
+```{r}
+#As gb_hosp_sf was created using just X and Y coordinates it doesn't have a crs assigned. Let's check the crs of the two objects using st_crs().
+st_crs(gla)
+st_crs(gb_hosp_sf)
+#For gla we get a lot of information including an EPSG number. For gb_hosp_sf we just get "NA".
+
+#We now set the coordinate reference system (CRS) of gb_hosp_sf to that of gla_hosp_crypto.
+st_crs(gb_hosp_sf) <- 27700
+st_crs(gb_hosp_sf)
+```
+Now back to the task at hand; getting only the hospitals that are in the Greater London Area.
+We can use a geometry operation called st_intersection to do the trick. It returns only those points that share a location with gla. 
+We can find a cheatsheet with all kinds of commands for spatial manipulation here: https://github.com/rstudio/cheatsheets/blob/master/sf.pdf
+```{r}
+gla_hosp <- st_intersection(gb_hosp_sf, gla)
+
+ggplot() +
+    geom_sf(data = gla) +
+    geom_sf(data = gla_hosp)
+```
+
+## Merging Areas
+Now let's look at merging small areas together into larger ones. We will look at catchment areas. A catchment area consits of all the different wards that are served by the same hospital, i.e.: have the same hospital code. Let's start by plotting the wards coloring them by hospital code.
+```{r}
+left_join(wards, serve, by = c("WARD" = "Ward")) %>% 
+  filter(Hosp_Code>=0) %>% 
+  ggplot() +
+  geom_sf(aes(fill=as.factor(Hosp_Code)), show.legend = F)
+```
+Now if we want to merge the wards together to create catchment areas we can just use the dplyr functions group_by and summarise, to group the wards by hospital codes. Let's assign the output to a new objects and plot it together with the locations of the hospitals.
+```{r}
+serveshp <- left_join(wards, serve, by = c("WARD" = "Ward")) %>% 
+    filter(Hosp_Code>=0) %>% 
+    group_by(Hosp_Code) %>% 
+    summarise()
+
+#Again we need to change the crs of our newly created object to match that of gla.
+st_crs(serveshp) <- 27700
+        
+ggplot() +
+    geom_sf(data = serveshp) +
+    geom_sf(data = gla_hosp)
+```
+
+## Working with tables
+Now let's look at altering tables. When working with any type of data it is important to know:
+
+* How many rows are there?
+* What do the column headings mean?
+* Are there any missing values?
+* Does the table contain duplicates?
+
+We can get the number of rows (observations) and columns (variables) using the glimpse() function. The summary() function will give us summary statistics for each variable and will also include the number of missing values. We need to watch out if any missing values are coded in a different format, e.g. -999 as R won't recongize these as missing values.
+```{r}
+glimpse(crypto)
+summary(crypto)
+```
+We can use the duplicated() function to check if any values for a certain variable are duplicated. It will return TRUE at the position of the duplicated values. To extract the duplicated values we can use subsetting. We can remove duplicates from a variable using distinct().
+```{r}
+duplicated(crypto$hosp_code)
+crypto$hosp_code[duplicated(crypto$hosp_code)]
+distinct(crypto, hosp_code)
+```
+We find that the hospital code 211 is present twice, but the rows have different case numbers. We don't know exactly how this happened but for now let's just ignore the duplicate value.
+
+For the purpose of this exercise we will create a new object called rates from joining together multiple objects. We then add a new rates variable using mutate. If we ever want to export an object as a shapefile we can do this using the st_write function.
+```{r}
+rates <- left_join(wards, pop, by=c("WARD"="Ward"))
+rates <- left_join(rates, serve, by=c("WARD"="Ward"))
+rates <- left_join(rates, crypto, by=c("Hosp_Code"="hosp_code"))
+
+rates <- rates %>% group_by(Hosp_Code) %>% summarise(population = sum(Population), cases = sum(n_cases[is.na(n_cases)==F]))
+
+rates <- rates %>% mutate(rates=(cases/population)*1000)
+
+#Again, we set the crs of the newly created object to match that of gla.
+st_crs(rates) <- 27700
+```
+
+
+Let's plot our new rates objects using the rates variable as fill.
+```{r}
+ggplot() +
+    geom_sf(data = rates, aes(fill=rates)) +
+    scale_fill_gradient(low = "#56B1F7", high = "#132B43")
+```
+
+Now let's try and plot rates together with the the hospitals. We first join gla_hosp to crypto so we can also plot the number of cases at each hospital and then plot this new object together with the rates object. We plot our object twice, the hospitals without cases in grey, and the hospitals with cases in black with the size of the dots relating to the number of cases.
+```{r}
+gla_hosp_crypto <- left_join(gla_hosp, crypto, by=c("Hosp_Code"="hosp_code"))
+
+ggplot() +
+    geom_sf(data=rates, aes(fill=rates)) +
+    scale_fill_gradient(low = "#56B1F7", high = "#132B43") +
+    geom_sf(data = gla_hosp_crypto[is.na(gla_hosp_crypto$n_cases)==T,], colour="grey", show.legend = "point") +
+    geom_sf(data = gla_hosp_crypto[is.na(gla_hosp_crypto$n_cases)==F,], aes(size = n_cases), show.legend = "point")
+#We use squard brackets to subset our data on whether the n_cases variable is "NA" for each row. We use the trailing comma before we close our square brackets to indicate that we are subsetting by rows and not by columns.
+```
+Looks good! Now it's time to get our map ready for publication.
+
+## Creating a map ready for printing
+Let's add a few finishing touches to our map using the packages ggthemes and ggspatial.
+```{r}
+#install.packages("ggthemes")
+#install.packages("ggspatial")
+library(ggthemes)
+library(ggspatial)
+
+ggplot() +
+    geom_sf(data=rates, aes(fill=rates)) +
+    scale_fill_gradient(low = "#56B1F7", high = "#132B43") +
+    geom_sf(data = gla_hosp_crypto[is.na(gla_hosp_crypto$n_cases)==T,], colour="grey", show.legend = "point") +
+    geom_sf(data = gla_hosp_crypto[is.na(gla_hosp_crypto$n_cases)==F,], aes(size = n_cases), show.legend = "point") +
+    theme_bw() +
+    annotation_scale(location = "bl", width_hint = 0.4) +
+    annotation_north_arrow(location = "bl", which_north = "true", pad_x = unit(0.2, "in"), pad_y = unit(0.2, "in"), style = north_arrow_fancy_orienteering) +
+    theme(panel.grid.major = element_line(color = gray(0.2), linetype = "dashed", size = 0.5), panel.background = element_rect(fill = "mintcream"))
+
+#We can save the map to our working directory using ggsave in a variety of file formats.
+ggsave("londoncryptorates.png")
+```
+And there we have it! Beautiful maps, all done in R.
