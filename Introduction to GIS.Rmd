@@ -15,13 +15,14 @@ library(tidyverse)
 #We use the package rstudiapi to automatically set the working directory to where this file is located.
 library(rstudioapi)
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+getwd()
 ```
 
 # Practical 1: Introduction using the Example "Monkeypox in Zaire"
 Let's start by loading our data using the st_read function from the sf package and plotting it using ggplot. If we view the contents of our newly created dataframe we can see that the spatial data is stored as a variable called geometry.
 ```{r}
 #Windows: zaire <- st_read("H:/GIS/ArcGIS/monkeypox/zaire.shp")
-zaire <- st_read("monkeypox/zaire.shp")
+zaire <- st_read("monkeypox/ZAIRE.SHP")
 
 ggplot(zaire) +
   geom_sf()
@@ -29,15 +30,10 @@ ggplot(zaire) +
 
 Let's load some of the other datasets and create a plot with multiple layers, coloring the forest green.
 ```{r}
-#villages <- st_read("H:/GIS/ArcGIS/monkeypox/villages.shp")
-#roads <- st_read("H:/GIS/ArcGIS/monkeypox/roads.shp")
-#rivers <- st_read("H:/GIS/ArcGIS/monkeypox/rivers.shp")
-#forest <- st_read("H:/GIS/ArcGIS/monkeypox/forest.shp")
-
-villages <- st_read("monkeypox/villages.shp")
-roads <- st_read("monkeypox/roads.shp")
-rivers <- st_read("monkeypox/rivers.shp")
-forest <- st_read("monkeypox/forest.shp")
+villages <- st_read("monkeypox/VILLAGES.SHP")
+roads <- st_read("monkeypox/ROADS.SHP")
+rivers <- st_read("monkeypox/RIVERS.SHP")
+forest <- st_read("monkeypox/FOREST.SHP")
 
 ggplot() +
   geom_sf(data = forest, fill = "green") +
@@ -83,9 +79,9 @@ We join tables using the family of join functions from dplyr, most commonly with
 
 Let's add some more datasets from a shapefile and from some dbf files. We can do this with read.dbf from the foreign package. 
 ```{r include=FALSE}
-province <- st_read("monkeypox/province.shp")
-provdata <- foreign::read.dbf("monkeypox/provdata.dbf")
-health <- foreign::read.dbf("monkeypox/health.dbf")
+province <- st_read("monkeypox/PROVINCE.SHP")
+provdata <- foreign::read.dbf("monkeypox/PROVDATA.DBF")
+health <- foreign::read.dbf("monkeypox/HEALTH.DBF")
 ```
 
 First let's join village and health. The second dataset will be matched to the first one by the variable "ID" which is present in both datasets.
@@ -191,15 +187,15 @@ rm(list = ls())
 library(readxl)
 
 crypto <- read.csv("crypto/crypto.txt", stringsAsFactors=FALSE)
-serve <- read.csv("crypto/serve.txt", stringsAsFactors=FALSE)
+serve <- read.csv("crypto/SERVE.TXT", stringsAsFactors=FALSE)
 
 
-wards <- st_read("crypto/wards.shp")
+wards <- st_read("crypto/WARDS.SHP")
 gla <- st_read("crypto/gla.shp")
-coast <- st_read("crypto/coast.shp")
-gb_hosp <- read.csv("crypto/gb_hosp.txt", stringsAsFactors=FALSE)
-pop <- read.csv("crypto/pop.txt", stringsAsFactors=FALSE)
-ward <- read_excel("crypto/ward.xls")
+coast <- st_read("crypto/COAST.SHP")
+gb_hosp <- read.csv("crypto/GB_HOSP.TXT", stringsAsFactors=FALSE)
+pop <- read.csv("crypto/POP.TXT", stringsAsFactors=FALSE)
+ward <- read_excel("crypto/WARD.XLS")
 ```
 
 The geom_sf function needs a geometry object to plot the data but gb_hosp only has X and Y coordinates as seperate columns. Let's fix that. We create a new object which contains the spatial data in sf format using the st_as_sf function.
@@ -221,7 +217,8 @@ st_crs(gb_hosp_sf)
 
 #We now set the coordinate reference system (CRS) of gb_hosp_sf to that of gla_hosp_crypto.
 st_crs(gb_hosp_sf) <- 27700
-st_crs(gb_hosp_sf)
+#Let's do the same for gla, just to be sure.
+st_crs(gla) <- 27700
 ```
 Now back to the task at hand; getting only the hospitals that are in the Greater London Area.
 We can use a geometry operation called st_intersection to do the trick. It returns only those points that share a location with gla. 
