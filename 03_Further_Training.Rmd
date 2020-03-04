@@ -1,0 +1,97 @@
+---
+title: "GIS Further Training in R Session 3"
+author: "Julian Matthewman"
+---
+This session deals with coordinate systems and creating and editing point datasets.
+
+Let's start by loading our packages (installing them beforehand if necessary) and setting our working directory. Make sure this file is in the same directory as the folders containing your datasets.
+```{r message=FALSE, warning=FALSE}
+#install.packages("sf")
+#install.packages("tidyverse")
+
+library(sf)
+library(tidyverse)
+
+#We use the package rstudiapi to automatically set the working directory to where this file is located.
+library(rstudioapi)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+```
+
+## Coordinate systems
+```{r}
+roads <- st_read("lshtm/roads.shp")
+```
+When loading this data we notice the following things:
+
+* bbox (short for bounding box) shows us the boundries of our map. The coordinates are large numbers so we can assume the unit is meters and since these are roads in London we can assume the coordinate system is the British national grid.
+* epsg and proj4string both show NA. This means that no coordinate system is assigned.
+
+EPSG stands for the European Petroleum Survey Group. While this sounds a bit odd, all we need to know is that the EPSG dataset is a widely used database for coordinate systems. The EPSG code for WGS84 (latitude and longitude) is 4326 and the code for the British national grid (projected) is 27700.
+We can find codes for other coordinate systems on sites such as this one: https://epsg.io
+
+Let's assign the British national grid coordinate reference system (crs) to our roads object. 
+```{r}
+st_crs(roads) <- 27700
+ggplot(roads) + geom_sf()
+```
+We recognize a familiar map of roads. Now let's try assigning the WGS84 system.
+```{r}
+st_crs(roads) <- 4326
+ggplot(roads) + geom_sf()
+```
+That's looking quite distroted. We also got the warning: "replacing crs does not reproject data; use st_transform for that". Let's see what what this st_stranform does.
+```{r}
+st_crs(roads) <- 27700 #first we reassign the working crs.
+roads <- st_transform(roads, 4326)
+ggplot(roads) + geom_sf()
+st_crs(roads)
+```
+Looking better. If we compare this map with the first one using British national grid we notice that they look exactly the same and that for both maps longitude and latitude are the x and y axis units. Can we also make a map with meters as our axis units?
+Yes, using coord_sf() which ensures that all layers use a common CRS.
+```{r}
+roads <- st_transform(roads, 27700)
+ggplot(roads) + 
+    geom_sf() + 
+    coord_sf(datum=st_crs(27700)) # datum is a reference from which spatial measurements are made
+```
+From this map we can make out that the area mapped here is about 1600 x 1200 meters.
+
+## Creating and editing point datasets
+When it comes to digitizing (converting coordinates from a map into a digital format by means such as creating points, tracing buildings etc.) software such as ArcGIS or QGIS are better suited for the task than R. If you really wanted to you could load an interactive map with mapview which gives you the latitude and longitude of your mouse cursors position. You could then manually add the coordinates to a table. Theoretically Ctrl + Left click on the map should copy the coordinates to your clipboard, but it doesn't seem to be working for me. You can also display additional information such as the EPSG code if you hold CTRL while moving your mouse over the map.
+```{r}
+library(mapview)
+mapview()
+```
+From this map we can figure out that the LSHTM is located at longitude -0.13004 and latitude 51.52006 and Buckingham Palace is at longitude -0.14300 and latitude 51.50080.
+We can create a new dataframe object with this information, convert it into an sf object and plot it together with an openstreetmaps basemap (from the ggspatial package).
+```{r}
+londonpoints <- data.frame(place=c("LSHTM", "Buckingham Palace"), longitude=c(-0.13004, -0.14300), latitude=c(51.52006, 51.50080))
+
+londonpoints <- st_as_sf(londonpoints, coords = c("longitude", "latitude"), 
+                 crs = 4326)
+
+library(ggspatial)
+ggplot() +
+    annotation_map_tile(zoom = 15, progress = "none") +
+    geom_sf(data = londonpoints)
+#The higher you set your zoom the higher the level of detail in the basemap, taking longer to load.
+#progress = "none" supresses the progress bar that would normally show.
+```
+
+Bonus: calculate the distance between LSHTM and Buckingham palace.
+```{r}
+p1 <- filter(londonpoints, place=="LSHTM")
+p2 <- filter(londonpoints, place=="Buckingham Palace")
+
+#We need the lwgeom package in order for st_distance to work.
+#install.packages("lwgeom")
+library(lwgeom)
+st_distance(p1, p2)
+```
+
+## Exercise
+Calculate the distance between LSHTM and your home!
+```{r}
+
+```
+

@@ -1,0 +1,65 @@
+---
+title: "GIS Further Training in R Session 2"
+author: "Julian Matthewman"
+---
+These "Further Training" notebooks cover the GIS further training sessions taught by Chris Grundy. If you are not familiar with the basics of GIS in R yet, check out the R notebook "Introduction to GIS". We rely once again primarily on the sf and tidyverse packages and the datasets found in the LSHTM U drive under downloads/teach/GIS/ArcGIS.
+
+Let's start by loading our packages (installing them beforehand if necessary) and setting our working directory. Make sure this file is in the same directory the folders containing our datasets.
+
+```{r message=FALSE, warning=FALSE}
+#install.packages("sf")
+#install.packages("readxl")
+#install.packages("tidyverse")
+
+library(sf)
+library(readxl)
+library(tidyverse)
+
+#We use the package rstudiapi to automatically set the working directory to where this file is located.
+library(rstudioapi)
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+```
+
+## Creating new variables
+Here we get familiar with a few functions to create new variables in R.
+Let's load the wards.xls dataset.
+```{r}
+ward <- read_excel("GLA-Census/wards.xls")
+```
+As we can see (if we view() the object) it only has 2 columns, Ward and Dha (District code).
+We want to create the following 4 variables:
+1. county code: this equals 01 for every ward 
+2. district code: equal to the first 2 characters of the ward code
+3. ons ward code: equal to the county code followed by the district code, i.e. 01ABAS
+4. rha code: equal to the first character of the dha code
+
+One of the handiest functions to manipulate tables is the dplyr (part of the tidyverse) function mutate(). Let's try and do all of this using mutate().
+```{r}
+ward <- ward %>% mutate(country = "01") #put the 01 in quotation marks("") so it creates strings rather than a numberical data, or else we will loose the 0 before the 1.
+
+ward <- ward %>% mutate(district = str_sub(Ward, start = 1, end = 2)) #Here we can use the strigr (part of the tidyverse) function str_sub. We specify the variable we want to extract substrings from and the start and end characters.
+
+ward <- ward %>% mutate(onsward = str_c(ward$country, ward$Ward)) #We use another command from the str family, this time str_c (c is for concatenate). It works like c() but for strings.
+
+ward <- ward %>% mutate(rha = str_sub(Dha, start = 1, end = 1)) #Once again we use str_sub.
+```
+
+If we wish to export our updated data back to Excel we can do it like this:
+```{r}
+write_excel_csv(ward, "GLA-Census/wards_new.csv") #This will give us a .csv file, but it's easy to work with or change to .xls in Excel.
+```
+
+## Exercise
+Add some more colums to the table!
+```{r}
+#ID number (1,2,3,4,5,...)
+
+#Ward code in lower case letters (aaaa, aaab, aaac, ...)
+
+#Number of "A"s in each Ward code
+
+#Identify if Ward code contains the letter "A" (TRUE or FALSE)
+
+```
+Hint: try using seq.int(nrow(ward)), str_to_lower, str_count, str_detect
+
