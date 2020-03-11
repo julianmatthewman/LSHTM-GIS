@@ -2,6 +2,13 @@
 title: "Introduction to GIS in R"
 author: "Julian Matthewman"
 ---
+
+```{r setup, echo=FALSE}
+
+knitr::opts_knit$set(root.dir = '../')
+
+```
+
 This notebook aims to be an introduction to Geographical Information Systems (GIS) in R and is based on the corresponding 2 day course which is taught in ArcGIS. It relies on the simple features (sf) package. Simple features or simple feature access is a standard that describes how spatial objects can be represented and stored. More on this at https://r-spatial.github.io/sf/articles/sf1.html. We will also make use of the tidyverse collection of packages, especially ggplot2 for plotting maps, dplyr for data transformation and pipes, so it is advisable that you have at least some knowledge of the tidyverse before going through this notebook. We will also need the datasets from the monkeypox, london-pct and crypto folders which can be found in the LSHTM U drive under downloads/teach/GIS/ArcGIS.
 
 Let's start by loading our packages (installing them beforehand if necessary) and setting our working directory. Make sure this file is is the directory as the monkeypox, london-pct and crypto folders.
@@ -12,15 +19,25 @@ Let's start by loading our packages (installing them beforehand if necessary) an
 library(sf)
 library(tidyverse)
 
-#We use the package rstudiapi to automatically set the working directory to where this file is located.
-library(rstudioapi)
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-getwd()
+```
+
+Before we start:
+We need to choose a location to save our data, and tell R where to look for the dataets we will be using. In your file manager, create to a new folder and copy the folders "monkeypox", "London-PCT", and "crypto" into your new location. 
+
+These files can be found at U:/SHARED/DATA/Download/Teach/GIS/ArcGIS
+
+Now, tell R studio where to find your files by setting your working directory to the location where you copied these folders.
+
+```{r eval=FALSE}
+
+setwd('path/to/your/folders')
+
 ```
 
 # Practical 1: Introduction using the Example "Monkeypox in Zaire"
 Let's start by loading our data using the st_read function from the sf package and plotting it using ggplot. If we view the contents of our newly created dataframe we can see that the spatial data is stored as a variable called geometry.
-```{r}
+```{r message=FALSE, warning=FALSE}
+
 #Windows: zaire <- st_read("H:/GIS/ArcGIS/monkeypox/zaire.shp")
 zaire <- st_read("monkeypox/ZAIRE.SHP")
 
@@ -29,7 +46,8 @@ ggplot(zaire) +
 ```
 
 Let's load some of the other datasets and create a plot with multiple layers, coloring the forest green.
-```{r}
+```{r message=FALSE}
+
 villages <- st_read("monkeypox/VILLAGES.SHP")
 roads <- st_read("monkeypox/ROADS.SHP")
 rivers <- st_read("monkeypox/RIVERS.SHP")
@@ -58,12 +76,16 @@ ggplot() +
   coord_sf(xlim = c(23, 25), ylim = c(-2.5, -4.5), expand = FALSE)
 ```
 
-We can also plot our data on an interactive map using the mapview package. This can be useful to explore maps like in ArcGIS, however is less useful for producing publication grade maps, so for the rest of the notebook we will stick with ggplot.
-```{r}
+We can also plot our data on an interactive map using the leaflet package. This can be useful to explore maps like in ArcGIS, however is less useful for producing publication grade maps, so for the rest of the notebook we will stick with ggplot.
+```{r message=FALSE, warning=FALSE}
 #install.packages("mapview")
-library(mapview)
+library(leaflet)
 
-mapview(forest)
+leaflet(forest) %>% 
+  addTiles() %>% 
+  addPolygons(color = 'green', 
+              fillColor  = 'green')
+
 ```
 
 ## Layer attributes
@@ -78,7 +100,8 @@ summary(villages)
 We join tables using the family of join functions from dplyr, most commonly with left_join() which joins one table to columns from another, matching values with the rows that they correspond to.
 
 Let's add some more datasets from a shapefile and from some dbf files. We can do this with read.dbf from the foreign package. 
-```{r include=FALSE}
+```{r}
+
 province <- st_read("monkeypox/PROVINCE.SHP")
 provdata <- foreign::read.dbf("monkeypox/PROVDATA.DBF")
 health <- foreign::read.dbf("monkeypox/HEALTH.DBF")
@@ -136,7 +159,8 @@ left_join(villages, health) %>%
 # Basic Exercise: Health in London
 Now let's prectice what we've learned so far using health data from the greater London area from the London Health Observatory. If we think our Enivironment is getting too cluttered by now we can always clear all objects from the workspace using the command rm(list = ls()).
 
-```{r include=FALSE}
+```{r}
+
 rm(list = ls())
 londonla <- st_read("London-PCT/london_la.shp")
 londonpct <- st_read("London-PCT/london_pct.shp")
@@ -182,7 +206,8 @@ Use the following empty chunk to create maps of:
 We will now look at ways of creating or modifying datasets to suit our mapping needs. 
 
 Let's import our datasets. Remeber you can clear all the previous objects from your workspace with rm(list = ls()). We're going to need the package readxl to read xls files.
-```{r include=FALSE}
+```{r}
+
 rm(list = ls())
 library(readxl)
 
